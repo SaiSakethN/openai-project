@@ -11,6 +11,9 @@ from langchain_community.document_loaders import WikipediaLoader
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+# -----------------------------
+# Load environment variables
+# -----------------------------
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -18,11 +21,16 @@ if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY is missing. Add it to your .env file or Streamlit secrets.")
     st.stop()
 
+# -----------------------------
+# Streamlit UI
+# -----------------------------
 st.set_page_config(page_title="Dynamic Topic RAG Chatbot", page_icon="🤖")
 st.title("🤖 Dynamic Topic RAG Chatbot")
 st.write("Enter any topic, load its knowledge from Wikipedia, and then ask questions about it.")
 
-# Session state
+# -----------------------------
+# Session State
+# -----------------------------
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 
@@ -33,7 +41,10 @@ if "docs_loaded" not in st.session_state:
     st.session_state.docs_loaded = False
 
 
-def build_vectorstore_from_topic(topic: str):
+# -----------------------------
+# Build Vector Store
+# -----------------------------
+def build_vectorstore(topic: str):
     loader = WikipediaLoader(query=topic, load_max_docs=3)
     docs = loader.load()
 
@@ -48,9 +59,13 @@ def build_vectorstore_from_topic(topic: str):
 
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     vectorstore = FAISS.from_documents(split_docs, embeddings)
+
     return vectorstore
 
 
+# -----------------------------
+# Topic Input
+# -----------------------------
 topic = st.text_input("Enter a topic", placeholder="Example: Retrieval Augmented Generation")
 
 if st.button("Load Topic Knowledge"):
@@ -58,10 +73,10 @@ if st.button("Load Topic Knowledge"):
         st.warning("Please enter a topic first.")
     else:
         with st.spinner(f"Loading knowledge for '{topic}'..."):
-            vectorstore = build_vectorstore_from_topic(topic)
+            vectorstore = build_vectorstore(topic)
 
             if vectorstore is None:
-                st.error("No documents were found for this topic. Try another topic.")
+                st.error("No documents found. Try another topic.")
             else:
                 st.session_state.vectorstore = vectorstore
                 st.session_state.current_topic = topic
@@ -69,22 +84,35 @@ if st.button("Load Topic Knowledge"):
                 st.success(f"Knowledge loaded for: {topic}")
 
 
+# -----------------------------
+# Chat Section
+# -----------------------------
 if st.session_state.docs_loaded and st.session_state.vectorstore is not None:
+
     st.info(f"Current topic: {st.session_state.current_topic}")
 
-    retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
+    # 🔥 Improved Retriever (Step 2)
+    retriever = st.session_state.vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 5}
+    )
 
     llm = ChatOpenAI(
         model="gpt-4o-mini",
         temperature=0
     )
 
+    # 🔥 Improved Prompt (Step 1)
     prompt = ChatPromptTemplate.from_template("""
-You are a strict question-answering assistant.
+You are a helpful question-answering assistant.
 
 Answer the user's question using ONLY the provided context.
 
-If the answer is not in the context, say exactly:
+If the question is related to the loaded topic but the answer is only partially available,
+answer using the closest relevant context from the documents.
+
+If the question is completely unrelated to the loaded topic or the context does not contain enough information,
+say exactly:
 "I can only answer questions related to the loaded topic."
 
 Keep the answer clear, accurate, and easy to understand.
@@ -102,12 +130,13 @@ Question:
 
     user_question = st.text_input(
         "Ask a question about the loaded topic",
-        placeholder="Example: What are the main applications of RAG?"
+        placeholder="Example: How does RAG work with LLMs?"
     )
 
     if user_question:
         with st.spinner("Searching and generating answer..."):
             response = retrieval_chain.invoke({"input": user_question})
             st.write(response["answer"])
+
 else:
     st.caption("Load a topic first to start asking questions.")
