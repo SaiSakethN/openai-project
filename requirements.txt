@@ -10,3 +10,4 @@ langchain-text-splitters
 faiss-cpu
 beautifulsoup4
 lxml
+langchain-classic
