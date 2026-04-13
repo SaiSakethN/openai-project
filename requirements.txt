@@ -1,6 +1,12 @@
-streamlit
-python-dotenv
-langchain
 langchain-core
 langchain-openai
 openai
+streamlit
+python-dotenv
+langchain
+langchain-openai
+langchain-community
+langchain-text-splitters
+faiss-cpu
+beautifulsoup4
+lxml
